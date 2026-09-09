@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>FloodGuard AI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1b2a;
+  --bg-deep:#081320;
+  --panel:#132a3e;
+  --panel-2:#0f2337;
+  --line:#22415a;
+  --text:#eaf1f7;
+  --muted:#8fa9bd;
+  --muted-2:#5d7a90;
+  --accent:#3fb8c7;
+  --low:#4caf7d;
+  --moderate:#e0b23c;
+  --high:#e07b34;
+  --extreme:#d4463e;
+  --radius:14px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Inter',system-ui,sans-serif;
+  min-height:100vh;
+  -webkit-tap-highlight-color:transparent;
+}
+.num{font-family:'IBM Plex Mono',monospace;}
+#app{max-width:520px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;padding-bottom:78px;}
+
+/* ---- Top bar ---- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px 14px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,var(--bg-deep),var(--bg));
+  position:sticky;top:0;z-index:50;
+}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-mark{
+  width:34px;height:34px;border-radius:9px;
+  background:radial-gradient(circle at 30% 30%, #4fd0df, #1c7f8f);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:15px;color:#052229;flex-shrink:0;
+}
+.brand-name{font-weight:700;font-size:15.5px;letter-spacing:.2px;}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.loc-pill{
+  font-size:11.5px;color:var(--accent);background:rgba(63,184,199,.1);
+  border:1px solid rgba(63,184,199,.35);padding:5px 10px;border-radius:20px;
+  max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.topbar-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;}
+.clock{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--text);text-align:right;line-height:1.3;}
+.clock .date{font-size:10px;color:var(--muted-2);display:block;}
+
+/* ---- Camera / scan ---- */
+.cam-wrap{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;}
+.cam-wrap video, .cam-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
+.cam-placeholder{color:var(--muted-2);font-size:12px;text-align:center;padding:20px;}
+.cam-controls{display:flex;gap:10px;margin-top:12px;}
+.cam-btn{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;}
+.cam-btn.primary{background:var(--accent);color:#052229;border-color:var(--accent);}
+.cam-btn:active{opacity:.8;}
+.cam-status{font-size:11px;color:var(--muted);margin-top:8px;text-align:center;}
+
+/* ---- Emergency numbers directory ---- */
+.numsearch{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:2px;}
+.numsearch::placeholder{color:var(--muted-2);}
+.country-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);gap:10px;}
+.country-row:last-child{border-bottom:none;}
+.country-name{font-size:12.5px;font-weight:600;flex-shrink:0;}
+.country-nums{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.num-chip{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--panel-2);border:1px solid var(--line);padding:3px 8px;border-radius:7px;color:var(--accent);white-space:nowrap;}
+.num-chip .lbl{color:var(--muted-2);font-family:'Inter',sans-serif;margin-right:3px;}
+.country-list{max-height:340px;overflow-y:auto;margin-top:6px;}
+.no-match{font-size:12px;color:var(--muted);text-align:center;padding:18px;}
+
+/* ---- Navigation ---- */
+#navmap{width:100%;height:260px;border-radius:12px;border:1px solid var(--line);overflow:hidden;margin-top:12px;}
+.nav-target-row{display:flex;gap:8px;overflow-x:auto;margin-top:10px;padding-bottom:2px;}
+.nav-target-chip{flex:0 0 auto;font-size:11.5px;background:var(--panel-2);border:1px solid var(--line);padding:7px 11px;border-radius:20px;cursor:pointer;color:var(--text);}
+.nav-target-chip.active{background:var(--accent);color:#052229;border-color:var(--accent);font-weight:700;}
+.nav-summary{display:flex;gap:14px;margin-top:12px;}
+.nav-stat{flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+.nav-stat-val{font-size:16px;font-weight:700;}
+.nav-stat-lbl{font-size:10.5px;color:var(--muted);margin-top:2px;}
+.leaflet-routing-container{display:none;}
+
+/* ---- Sections ---- */
+.view{display:none;padding:16px 16px 8px;animation:fade .25s ease;}
+.view.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+.section-title{font-size:13px;text-transform:none;color:var(--muted);margin:22px 2px 10px;font-weight:600;}
+.section-title:first-child{margin-top:2px;}
+
+.card{
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:16px;
+}
+
+/* ---- Risk gauge ---- */
+.risk-hero{
+  background:linear-gradient(160deg,var(--panel),var(--panel-2));
+  border:1px solid var(--line);border-radius:18px;padding:20px;
+  display:flex;flex-direction:column;gap:14px;
+}
+.risk-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.risk-region{font-size:14px;font-weight:600;}
+.risk-updated{font-size:11px;color:var(--muted-2);margin-top:3px;}
+.demo-tag{
+  font-size:9.5px;color:#f2c76b;background:rgba(224,178,60,.12);
+  border:1px solid rgba(224,178,60,.4);padding:3px 7px;border-radius:6px;
+  white-space:nowrap;font-weight:600;
+}
+.gauge-wrap{display:flex;align-items:center;gap:18px;}
+.gauge{position:relative;width:128px;height:128px;flex-shrink:0;}
+.gauge svg{transform:rotate(-90deg);}
+.gauge-center{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+}
+.gauge-pct{font-size:26px;font-weight:700;line-height:1;}
+.gauge-label{font-size:10px;color:var(--muted);margin-top:3px;}
+.risk-badge{
+  display:inline-block;padding:5px 12px;border-radius:8px;
+  font-size:13px;font-weight:700;letter-spacing:.3px;margin-bottom:8px;
+}
+.risk-factors{font-size:12.5px;color:var(--muted);line-height:1.5;}
+
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;}
+.stat-val{font-size:17px;font-weight:700;}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:2px;}
+
+.horizon-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-top:6px;}
+.horizon-chip{
+  flex:0 0 auto;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:10px;padding:10px 13px;text-align:center;min-width:64px;
+}
+.horizon-h{font-size:10.5px;color:var(--muted);}
+.horizon-pct{font-size:15px;font-weight:700;margin-top:4px;}
+
+/* ---- Map ---- */
+#worldmap{width:100%;height:340px;border-radius:var(--radius);border:1px solid var(--line);overflow:hidden;}
+.map-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--muted);}
+.legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+.map-hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5;}
+.preset-row{display:flex;gap:8px;overflow-x:auto;margin-top:12px;padding-bottom:2px;}
+.preset-chip{
+  flex:0 0 auto;font-size:12px;background:var(--panel-2);border:1px solid var(--line);
+  color:var(--text);padding:8px 12px;border-radius:20px;cursor:pointer;
+}
+.preset-chip:active{background:var(--line);}
+
+/* ---- Location detail ---- */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:12px;}
+.detail-cell{background:var(--panel);padding:11px 12px;}
+.detail-k{font-size:10.5px;color:var(--muted);}
+.detail-v{font-size:14px;font-weight:600;margin-top:3px;}
+
+/* ---- Charts ---- */
+.chart-card{margin-top:14px;}
+.chart-title{font-size:13px;font-weight:600;margin-bottom:2px;}
+.chart-sub{font-size:11px;color:var(--muted-2);margin-bottom:10px;}
+.chart-box{height:170px;position:relative;}
+.chart-split-note{display:flex;gap:14px;font-size:10.5px;color:var(--muted);margin-top:8px;}
+.dash{display:inline-block;width:14px;height:0;border-top:2px dashed var(--muted-2);vertical-align:middle;margin-right:4px;}
+.solid{display:inline-block;width:14px;height:2px;background:var(--accent);vertical-align:middle;margin-right:4px;}
+
+/* ---- Explainability ---- */
+.factor-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);}
+.factor-row:last-child{border-bottom:none;}
+.factor-name{flex:1;font-size:12.5px;color:var(--text);}
+.factor-bar-track{width:88px;height:6px;background:var(--panel-2);border-radius:4px;overflow:hidden;}
+.factor-bar-fill{height:100%;border-radius:4px;}
+.factor-level{font-size:11px;color:var(--muted);width:52px;text-align:right;flex-shrink:0;}
+.confidence-note{font-size:11.5px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px solid var(--line);line-height:1.5;}
+
+/* ---- Alerts ---- */
+.alert-card{
+  border-radius:12px;padding:13px 14px;margin-bottom:10px;
+  border-left:4px solid var(--muted);background:var(--panel);
+}
+.alert-card.low{border-left-color:var(--low);}
+.alert-card.moderate{border-left-color:var(--moderate);}
+.alert-card.high{border-left-color:var(--high);}
+.alert-card.extreme{border-left-color:var(--extreme);background:rgba(212,70,62,.08);}
+.alert-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.alert-sev{font-size:10.5px;font-weight:700;letter-spacing:.3px;padding:3px 8px;border-radius:6px;}
+.alert-time{font-size:11px;color:var(--muted-2);}
+.alert-msg{font-size:13.5px;margin-top:7px;line-height:1.45;}
+.alert-loc{font-size:11px;color:var(--muted);margin-top:5px;}
+.empty-note{font-size:12.5px;color:var(--muted);text-align:center;padding:30px 10px;}
+
+/* ---- Emergency ---- */
+.em-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
+.em-item:last-child{border-bottom:none;}
+.em-icon{width:36px;height:36px;border-radius:9px;background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.em-name{font-size:13.5px;font-weight:600;}
+.em-desc{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4;}
+.report-btn{
+  width:100%;padding:14px;border-radius:12px;border:none;
+  background:linear-gradient(135deg,#e0692f,#c23b3b);color:#fff;
+  font-size:14.5px;font-weight:700;margin-top:16px;cursor:pointer;
+}
+.report-btn:active{opacity:.85;}
+.contact-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.contact-row:last-child{border-bottom:none;}
+.contact-num{font-family:'IBM Plex Mono',monospace;color:var(--accent);}
+
+/* ---- Admin ---- */
+.tab-row{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:2px;}
+.tab-chip{flex:0 0 auto;font-size:12px;padding:7px 12px;border-radius:9px;background:var(--panel-2);color:var(--muted);border:1px solid var(--line);cursor:pointer;}
+.tab-chip.active{background:var(--accent);color:#052229;font-weight:700;border-color:var(--accent);}
+.src-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line);}
+.src-row:last-child{border-bottom:none;}
+.src-name{font-size:13px;font-weight:500;}
+.src-meta{font-size:11px;color:var(--muted-2);margin-top:2px;}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;}
+.status-ok{background:var(--low);}
+.status-warn{background:var(--moderate);}
+.status-off{background:var(--muted-2);}
+.status-text{font-size:11.5px;}
+.threshold-row{display:flex;align-items:center;gap:10px;padding:9px 0;}
+.threshold-label{width:82px;font-size:12px;color:var(--muted);}
+.threshold-track{flex:1;height:6px;border-radius:4px;background:var(--panel-2);position:relative;}
+.threshold-fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;}
+.threshold-val{width:40px;text-align:right;font-size:12px;font-family:'IBM Plex Mono',monospace;}
+.model-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+.model-row:last-child{border-bottom:none;}
+.model-row span:last-child{font-weight:600;font-family:'IBM Plex Mono',monospace;}
+
+/* ---- Bottom nav ---- */
+.bottomnav{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:520px;
+  background:rgba(13,27,42,.96);backdrop-filter:blur(10px);
+  border-top:1px solid var(--line);
+  display:flex;z-index:100;
+}
+.nav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:10px 2px 12px;background:none;border:none;color:var(--muted-2);
+  font-family:inherit;font-size:10px;cursor:pointer;
+}
+.nav-btn .ic{font-size:18px;}
+.nav-btn.active{color:var(--accent);}
+
+/* ---- Misc ---- */
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border-radius:10px;}
+.leaflet-popup-tip{background:var(--panel);}
+.leaflet-popup-content{font-family:'Inter',sans-serif;font-size:12.5px;margin:10px 12px;}
+.leaflet-container{background:#0a1826;}
+::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">FG</div>
+      <div>
+        <div class="brand-name">FloodGuard AI</div>
+        <div class="brand-sub">Flash flood early warning</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="loc-pill" id="topLocPill">Himalaya Foothills, IN</div>
+      <div class="clock" id="liveClock">--:--:-- <span class="date" id="liveDate">-- --- ----</span></div>
+    </div>
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <div class="view active" id="view-home">
+    <div class="risk-hero">
+      <div class="risk-hero-top">
+        <div>
+          <div class="risk-region" id="homeRegionName">Himalaya Foothills, IN</div>
+          <div class="risk-updated" id="homeUpdated">Updated just now</div>
+        </div>
+        <div class="demo-tag">SIMULATED DATA</div>
+      </div>
+      <div class="gauge-wrap">
+        <div class="gauge">
+          <svg width="128" height="128" viewBox="0 0 128 128">
+            <circle cx="64" cy="64" r="54" fill="none" stroke="#0f2337" stroke-width="12"/>
+            <circle id="gaugeArc" cx="64" cy="64" r="54" fill="none" stroke="var(--moderate)" stroke-width="12" stroke-linecap="round" stroke-dasharray="339" stroke-dashoffset="339"/>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-pct num" id="gaugePct">--%</div>
+            <div class="gauge-label">probability</div>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <span class="risk-badge" id="homeRiskBadge">MODERATE</span>
+          <div class="risk-factors" id="homeFactors">Rising rainfall over the last 6 hours combined with elevated soil moisture.</div>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-val num" id="statWeather">24°C</div><div class="stat-lbl">Conditions · light rain</div></div>
+        <div class="stat"><div class="stat-val num" id="statRainNow">6.2 mm/h</div><div class="stat-lbl">Rainfall intensity</div></div>
+        <div class="stat"><div class="stat-val num" id="statRainAccum">48 mm</div><div class="stat-lbl">24h accumulated rain</div></div>
+        <div class="stat"><div class="stat-val num" id="statRiver">+0.8 m</div><div class="stat-lbl">River level, 6h change</div></div>
+      </div>
+    </div>
+
+    <div class="section-title">Forecast horizon</div>
+    <div class="card">
+      <div class="horizon-row" id="horizonRow"></div>
+    </div>
+
+    <div class="section-title">Rainfall &amp; risk trend</div>
+    <div class="card chart-card">
+      <div class="chart-title">Flood probability, 24h</div>
+      <div class="chart-sub">Historical vs AI-predicted values</div>
+      <div class="chart-box"><canvas id="homeTrendChart"></canvas></div>
+      <div class="chart-split-note"><span><span class="solid"></span>Observed</span><span><span class="dash"></span>Predicted</span></div>
+    </div>
+  </div>
+
+  <!-- ============ RISK MAP ============ -->
+  <div class="view" id="view-map">
+    <div class="section-title">World flood-risk map</div>
+    <div id="worldmap"></div>
+    <div class="map-legend">
+      <span><span class="legend-dot" style="background:var(--low)"></span>Low</span>
+      <span><span class="legend-dot" style="background:var(--moderate)"></span>Moderate</span>
+      <span><span class="legend-dot" style="background:var(--high)"></span>High</span>
+      <span><span class="legend-dot" style="background:var(--extreme)"></span>Extreme</span>
+    </div>
+    <div class="map-hint">Tap anywhere on the map to run a flood-risk assessment for that location. Preset markers show demo hilly regions worldwide; all values are simulated for this prototype.</div>
+    <div class="preset-row" id="presetRow"></div>
+
+    <div class="section-title">Selected location</div>
+    <div class="card">
+      <div class="risk-region" id="mapSelName">Himalaya Foothills, IN</div>
+      <span class="risk-badge" style="margin-top:8px;" id="mapSelBadge">MODERATE</span>
+      <div class="detail-grid" id="mapDetailGrid"></div>
+    </div>
+  </div>
+
+  <!-- ============ PREDICTION ============ -->
+  <div class="view" id="view-prediction">
+    <div class="section-title">AI prediction — <span id="predRegionName">Himalaya Foothills, IN</span></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="gauge-pct num" id="predPct" style="font-size:30px;">--%</div>
+          <span class="risk-badge" id="predBadge">MODERATE</span>
+        </div>
+        <div style="text-align:right;font-size:11px;color:var(--muted);">
+          Model confidence<br><span class="num" id="predConfidence" style="font-size:15px;color:var(--text);">--%</span>
+        </div>
+      </div>
+      <div class="confidence-note" id="predSummary">Heavy rainfall and rapidly saturating soil are the leading drivers of this prediction.</div>
+    </div>
+
+    <div class="section-title">Why is the risk at this level?</div>
+    <div class="card" id="factorList"></div>
+
+    <div class="section-title">Rainfall</div>
+    <div class="card chart-card"><div class="chart-box"><canvas id="rainChart"></canvas></div></div>
+
+    <div class="section-title">River / water level</div>
+    <div class="card chart-card"><div class="chart-box"><canvas id="riverChart"></canvas></div></div>
+
+    <div class="section-title">Soil moisture</div>
+    <div class="card chart-card"><div class="chart-box"><canvas id="soilChart"></canvas></div></div>
+
+    <div class="confidence-note">Prediction results are model output for this prototype and are separate from official disaster-management warnings. Always follow instructions from local authorities.</div>
+  </div>
+
+  <!-- ============ ALERTS ============ -->
+  <div class="view" id="view-alerts">
+    <div class="section-title">Active alerts</div>
+    <div id="alertList"></div>
+  </div>
+
+  <!-- ============ EMERGENCY ============ -->
+  <div class="view" id="view-emergency">
+    <div class="section-title">Nearby safe areas</div>
+    <div class="card">
+      <div class="em-item"><div class="em-icon">⛰️</div><div><div class="em-name">Ridge Road high ground</div><div class="em-desc">Elevated area, 1.4 km from town centre. Configure with verified coordinates before real deployment.</div></div></div>
+      <div class="em-item"><div class="em-icon">🏫</div><div><div class="em-name">Community shelter — Govt. School</div><div class="em-desc">Capacity 300. Admin-configurable; demo placeholder only.</div></div></div>
+      <div class="em-item"><div class="em-icon">🛣️</div><div><div class="em-name">Evacuation route A</div><div class="em-desc">Follow signage toward higher elevation, away from river channels.</div></div></div>
+    </div>
+
+    <div class="section-title">Navigate to safety</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;">Route from your current position to the nearest configured safe zone. Uses your device's location and public road routing.</div>
+      <div class="nav-target-row" id="navTargetRow"></div>
+      <div id="navmap"></div>
+      <div class="nav-summary">
+        <div class="nav-stat"><div class="nav-stat-val num" id="navDistance">--</div><div class="nav-stat-lbl">Distance</div></div>
+        <div class="nav-stat"><div class="nav-stat-val num" id="navDuration">--</div><div class="nav-stat-lbl">Est. travel time</div></div>
+      </div>
+      <div class="cam-controls">
+        <button class="cam-btn primary" id="useMyLocationBtn">Use my location</button>
+      </div>
+      <div class="cam-status" id="navStatus">Location not yet requested.</div>
+    </div>
+
+    <div class="section-title">Scan &amp; report with photo</div>
+    <div class="card">
+      <div class="cam-wrap" id="camWrap">
+        <div class="cam-placeholder" id="camPlaceholder">Camera preview will appear here.<br>Use this to attach a photo when reporting flooding.</div>
+        <video id="camVideo" autoplay playsinline muted style="display:none;"></video>
+        <img id="camSnapshot" style="display:none;">
+      </div>
+      <canvas id="camCanvas" style="display:none;"></canvas>
+      <div class="cam-controls">
+        <button class="cam-btn primary" id="camStartBtn">Open camera</button>
+        <button class="cam-btn" id="camCaptureBtn" style="display:none;">Capture</button>
+        <button class="cam-btn" id="camRetakeBtn" style="display:none;">Retake</button>
+      </div>
+      <div class="cam-status" id="camStatus">No photo attached yet.</div>
+    </div>
+
+    <div class="section-title">Emergency numbers — worldwide</div>
+    <div class="card">
+      <input class="numsearch" id="numSearch" type="text" placeholder="Search country…">
+      <div class="country-list" id="countryList"></div>
+    </div>
+
+    <div class="section-title">Safety guidance</div>
+    <div class="card">
+      <div style="font-size:12.5px;color:var(--text);line-height:1.7;">
+        Move to higher ground immediately if flash flooding is indicated. Avoid crossing flowing water on foot or by vehicle. Keep this app and a battery radio charged. Follow instructions from official emergency services over any app-generated prediction.
+      </div>
+    </div>
+
+    <button class="report-btn" id="reportBtn">Report a flood at this location</button>
+  </div>
+
+  <!-- ============ ADMIN ============ -->
+  <div class="view" id="view-admin">
+    <div class="tab-row" id="adminTabs">
+      <div class="tab-chip active" data-tab="sensors">Sensors</div>
+      <div class="tab-chip" data-tab="sources">Data sources</div>
+      <div class="tab-chip" data-tab="thresholds">Thresholds</div>
+      <div class="tab-chip" data-tab="model">Model</div>
+    </div>
+
+    <div class="admin-pane" id="pane-sensors">
+      <div class="section-title">Live sensor status</div>
+      <div class="card" id="sensorList"></div>
+      <div class="section-title">Summary</div>
+      <div class="stat-grid">
+        <div class="stat"><div class="stat-val" id="admHighRisk">3</div><div class="stat-lbl">High/extreme locations</div></div>
+        <div class="stat"><div class="stat-val" id="admActiveAlerts">2</div><div class="stat-lbl">Active alerts</div></div>
+      </div>
+    </div>
+
+    <div class="admin-pane" id="pane-sources" style="display:none;">
+      <div class="section-title">Data source availability</div>
+      <div class="card" id="sourceList"></div>
+    </div>
+
+    <div class="admin-pane" id="pane-thresholds" style="display:none;">
+      <div class="section-title">Risk classification thresholds <span style="color:var(--muted-2);font-weight:400;">(prototype — validate before real use)</span></div>
+      <div class="card" id="thresholdList"></div>
+    </div>
+
+    <div class="admin-pane" id="pane-model" style="display:none;">
+      <div class="section-title">Model performance</div>
+      <div class="card">
+        <div class="model-row"><span>Model type</span><span>XGBoost + LSTM ensemble</span></div>
+        <div class="model-row"><span>Precision</span><span>0.84</span></div>
+        <div class="model-row"><span>Recall</span><span>0.79</span></div>
+        <div class="model-row"><span>F1 score</span><span>0.81</span></div>
+        <div class="model-row"><span>Last trained</span><span>Demo build</span></div>
+        <div class="model-row"><span>Historical events in training set</span><span>1,240</span></div>
+      </div>
+      <div class="section-title">Historical flood events (demo)</div>
+      <div class="card" id="historyList"></div>
+    </div>
+  </div>
+
+  <div class="bottomnav">
+    <button class="nav-btn active" data-view="home"><span class="ic">🏠</span>Home</button>
+    <button class="nav-btn" data-view="map"><span class="ic">🗺️</span>Risk Map</button>
+    <button class="nav-btn" data-view="prediction"><span class="ic">📈</span>Prediction</button>
+    <button class="nav-btn" data-view="alerts"><span class="ic">🚨</span>Alerts</button>
+    <button class="nav-btn" data-view="emergency"><span class="ic">🧭</span>Emergency</button>
+  </div>
+</div>
+
+<script>
+/* ======================= Deterministic demo data engine ======================= */
+/* All values below are clearly-labeled SIMULATED demo data generated from a seeded
+   pseudo-random function based on location + hour, so a given place looks
+   consistent between visits. No real sensor/weather feed is used. */
+
+function seededRandom(seed){
+  let s = Math.sin(seed) * 10000;
+  return s - Math.floor(s);
+}
+function locSeed(lat, lng, offset){
+  return (lat * 12.9898 + lng * 78.233 + (offset||0)) ;
+}
+function rnd(lat,lng,offset,min,max){
+  const r = seededRandom(locSeed(lat,lng,offset));
+  return min + r*(max-min);
+}
+
+const RISK_LEVELS = [
+  {name:'LOW', color:'var(--low)', hex:'#4caf7d', max:25},
+  {name:'MODERATE', color:'var(--moderate)', hex:'#e0b23c', max:50},
+  {name:'HIGH', color:'var(--high)', hex:'#e07b34', max:75},
+  {name:'EXTREME', color:'var(--extreme)', hex:'#d4463e', max:100},
+];
+function riskFor(pct){
+  for(const r of RISK_LEVELS){ if(pct <= r.max) return r; }
+  return RISK_LEVELS[RISK_LEVELS.length-1];
+}
+
+const PRESETS = [
+  {name:'Himalaya Foothills, IN', lat:29.9, lng:79.4, bias:34},
+  {name:'Uttarakhand Hills, IN', lat:30.3, lng:78.9, bias:58},
+  {name:'Kerala — Western Ghats, IN', lat:10.1, lng:76.9, bias:47},
+  {name:'Chittagong Hill Tracts, BD', lat:22.6, lng:92.2, bias:66},
+  {name:'Cordillera, Philippines', lat:16.6, lng:120.9, bias:72},
+  {name:'Andes — Antioquia, CO', lat:6.6, lng:-75.6, bias:41},
+  {name:'Appalachian Mtns, US (KY)', lat:37.5, lng:-83.0, bias:29},
+  {name:'Alps — Valais, CH', lat:46.2, lng:7.5, bias:18},
+  {name:'Rift Valley Highlands, KE', lat:-0.4, lng:36.1, bias:37},
+  {name:'Java Highlands, ID', lat:-7.3, lng:110.4, bias:61},
+];
+
+let currentLoc = {name:PRESETS[0].name, lat:PRESETS[0].lat, lng:PRESETS[0].lng, bias:PRESETS[0].bias};
+
+function computeLocationData(loc){
+  const now = new Date();
+  const hourSeed = Math.floor(now.getTime()/ (1000*60*30)); // changes every 30 min
+  const base = loc.bias!==undefined ? loc.bias : rnd(loc.lat,loc.lng,1,8,70);
+  const pct = Math.max(3, Math.min(97, base + rnd(loc.lat,loc.lng,hourSeed,-9,9)));
+  const risk = riskFor(pct);
+
+  const rainNow = +(rnd(loc.lat,loc.lng,2+hourSeed,0.5,22)).toFixed(1);
+  const rainAccum = Math.round(rnd(loc.lat,loc.lng,3,10,180));
+  const riverChange = +(rnd(loc.lat,loc.lng,4+hourSeed,-0.3,2.4)).toFixed(1);
+  const tempC = Math.round(rnd(loc.lat,loc.lng,5,14,33));
+  const elevation = Math.round(rnd(loc.lat,loc.lng,6,120,3400));
+  const slope = Math.round(rnd(loc.lat,loc.lng,7,4,42));
+  const soilMoisture = Math.round(rnd(loc.lat,loc.lng,8+hourSeed,20,95));
+  const riverDist = +(rnd(loc.lat,loc.lng,9,0.1,6)).toFixed(1);
+  const confidence = Math.round(rnd(loc.lat,loc.lng,10,68,94));
+
+  const factors = [
+    {name:'Rainfall intensity', level: rainNow>15?'Very High':rainNow>8?'High':rainNow>3?'Moderate':'Low', val: Math.min(100, rainNow*4.3)},
+    {name:'6h cumulative rainfall', level: rainAccum>100?'High':rainAccum>50?'Moderate':'Low', val: Math.min(100, rainAccum/1.8)},
+    {name:'River level trend', level: riverChange>1.5?'Rising rapidly':riverChange>0.5?'Rising':'Stable', val: Math.min(100, Math.max(5,riverChange*38))},
+    {name:'Soil moisture', level: soilMoisture>75?'High':soilMoisture>45?'Moderate':'Low', val: soilMoisture},
+    {name:'Terrain slope', level: slope>30?'High':slope>15?'Moderate':'Low', val: Math.min(100, slope*2.4)},
+  ];
+
+  const horizons = [1,3,6,12,24].map(h=>{
+    const v = Math.max(2, Math.min(98, pct + rnd(loc.lat,loc.lng,20+h+hourSeed, -6-h*0.6, 6+h*0.9)));
+    return {h, pct: Math.round(v)};
+  });
+
+  return {pct: Math.round(pct), risk, rainNow, rainAccum, riverChange, tempC, elevation, slope,
+    soilMoisture, riverDist, confidence, factors, horizons};
+}
+
+function series(loc, offsetSeed, base, spread, points, trendUp){
+  const arr=[];
+  for(let i=0;i<points;i++){
+    const drift = trendUp ? (i/points)*spread*0.6 : 0;
+    arr.push(+(Math.max(0, base + drift + rnd(loc.lat,loc.lng,offsetSeed+i, -spread/2, spread/2))).toFixed(1));
+  }
+  return arr;
+}
+
+/* ======================= Rendering ======================= */
+const hourLabels = (()=>{const l=[];for(let i=-11;i<=12;i++){l.push(i<=0?(i===0?'now':i+'h'):'+'+i+'h');}return l;})();
+
+let charts = {};
+function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
+
+function lineChart(canvasId, key, labels, datasets, yTitle){
+  destroyChart(key);
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  charts[key] = new Chart(ctx, {
+    type:'line',
+    data:{labels, datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#5d7a90', maxTicksLimit:6, font:{size:9}}, grid:{color:'#16324a'}},
+        y:{ticks:{color:'#5d7a90', font:{size:9}}, grid:{color:'#16324a'}, title:{display:!!yTitle, text:yTitle, color:'#8fa9bd', font:{size:10}}}
+      }
+    }
+  });
+}
+
+function renderAll(){
+  const d = computeLocationData(currentLoc);
+  const now = new Date();
+  const nowStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+  document.getElementById('topLocPill').textContent = currentLoc.name;
+
+  // HOME
+  document.getElementById('homeRegionName').textContent = currentLoc.name;
+  document.getElementById('homeUpdated').textContent = 'Simulated update · '+nowStr;
+  document.getElementById('gaugePct').textContent = d.pct+'%';
+  document.getElementById('gaugePct').style.color = d.risk.hex;
+  const circumference = 2*Math.PI*54;
+  const offset = circumference - (d.pct/100)*circumference;
+  const arc = document.getElementById('gaugeArc');
+  arc.style.stroke = d.risk.hex;
+  arc.style.strokeDashoffset = offset;
+  const badge = document.getElementById('homeRiskBadge');
+  badge.textContent = d.risk.name;
+  badge.style.background = d.risk.hex+'26';
+  badge.style.color = d.risk.hex;
+  badge.style.border = '1px solid '+d.risk.hex+'66';
+  document.getElementById('homeFactors').textContent = topFactorSentence(d);
+  document.getElementById('statWeather').textContent = d.tempC+'°C';
+  document.getElementById('statRainNow').textContent = d.rainNow+' mm/h';
+  document.getElementById('statRainAccum').textContent = d.rainAccum+' mm';
+  document.getElementById('statRiver').textContent = (d.riverChange>=0?'+':'')+d.riverChange+' m';
+
+  const horizonRow = document.getElementById('horizonRow');
+  horizonRow.innerHTML='';
+  d.horizons.forEach(h=>{
+    const r = riskFor(h.pct);
+    horizonRow.innerHTML += `<div class="horizon-chip"><div class="horizon-h">${h.h}h</div><div class="horizon-pct num" style="color:${r.hex}">${h.pct}%</div></div>`;
+  });
+
+  const obs = series(currentLoc, 100, Math.max(4,d.pct-18), 14, 12, true);
+  const pred = series(currentLoc, 200, d.pct, 10, 12, true);
+  lineChart('homeTrendChart','home',hourLabels, [
+    {data:[...obs, ...Array(12).fill(null)], borderColor:'#3fb8c7', backgroundColor:'rgba(63,184,199,.12)', fill:true, tension:.35, pointRadius:0, borderWidth:2},
+    {data:[...Array(11).fill(null), obs[obs.length-1], ...pred], borderColor:'#8fa9bd', borderDash:[5,4], fill:false, tension:.35, pointRadius:0, borderWidth:2},
+  ]);
+
+  // MAP selected detail
+  document.getElementById('mapSelName').textContent = currentLoc.name;
+  const mb = document.getElementById('mapSelBadge');
+  mb.textContent = d.risk.name; mb.style.background=d.risk.hex+'26'; mb.style.color=d.risk.hex; mb.style.border='1px solid '+d.risk.hex+'66';
+  document.getElementById('mapDetailGrid').innerHTML = `
+    <div class="detail-cell"><div class="detail-k">Coordinates</div><div class="detail-v num">${currentLoc.lat.toFixed(2)}, ${currentLoc.lng.toFixed(2)}</div></div>
+    <div class="detail-cell"><div class="detail-k">Elevation</div><div class="detail-v num">${d.elevation} m</div></div>
+    <div class="detail-cell"><div class="detail-k">Slope</div><div class="detail-v num">${d.slope}°</div></div>
+    <div class="detail-cell"><div class="detail-k">Flood probability</div><div class="detail-v num" style="color:${d.risk.hex}">${d.pct}%</div></div>
+    <div class="detail-cell"><div class="detail-k">River distance</div><div class="detail-v num">${d.riverDist} km</div></div>
+    <div class="detail-cell"><div class="detail-k">Soil moisture</div><div class="detail-v num">${d.soilMoisture}%</div></div>
+  `;
+
+  // PREDICTION
+  document.getElementById('predRegionName').textContent = currentLoc.name;
+  document.getElementById('predPct').textContent = d.pct+'%';
+  document.getElementById('predPct').style.color = d.risk.hex;
+  const pb = document.getElementById('predBadge');
+  pb.textContent=d.risk.name; pb.style.background=d.risk.hex+'26'; pb.style.color=d.risk.hex; pb.style.border='1px solid '+d.risk.hex+'66';
+  document.getElementById('predConfidence').textContent = d.confidence+'%';
+  document.getElementById('predSummary').textContent = topFactorSentence(d)+' Model confidence reflects uncertainty from limited live sensor coverage in this demo.';
+
+  const fl = document.getElementById('factorList');
+  fl.innerHTML='';
+  d.factors.forEach(f=>{
+    fl.innerHTML += `<div class="factor-row">
+      <div class="factor-name">${f.name}</div>
+      <div class="factor-bar-track"><div class="factor-bar-fill" style="width:${f.val}%;background:${d.risk.hex}"></div></div>
+      <div class="factor-level">${f.level}</div>
+    </div>`;
+  });
+
+  const rain = series(currentLoc, 300, d.rainNow*0.5, d.rainNow*0.9, 12, true);
+  const rainP = series(currentLoc, 310, d.rainNow, d.rainNow*0.7, 12, true);
+  lineChart('rainChart','rain', hourLabels, [
+    {data:[...rain, ...Array(12).fill(null)], borderColor:'#3fb8c7', backgroundColor:'rgba(63,184,199,.15)', fill:true, tension:.3, pointRadius:0, borderWidth:2},
+    {data:[...Array(11).fill(null), rain[rain.length-1], ...rainP], borderColor:'#8fa9bd', borderDash:[5,4], fill:false, tension:.3, pointRadius:0, borderWidth:2},
+  ], 'mm/h');
+
+  const river = series(currentLoc, 400, 2+d.riverChange*0.4, 0.6, 12, true);
+  const riverP = series(currentLoc, 410, river[river.length-1], 0.8, 12, d.riverChange>0);
+  lineChart('riverChart','river', hourLabels, [
+    {data:[...river, ...Array(12).fill(null)], borderColor:'#e0b23c', backgroundColor:'rgba(224,178,60,.13)', fill:true, tension:.3, pointRadius:0, borderWidth:2},
+    {data:[...Array(11).fill(null), river[river.length-1], ...riverP], borderColor:'#8fa9bd', borderDash:[5,4], fill:false, tension:.3, pointRadius:0, borderWidth:2},
+  ], 'metres');
+
+  const soil = series(currentLoc, 500, d.soilMoisture-10, 8, 12, d.soilMoisture>50);
+  const soilP = series(currentLoc, 510, d.soilMoisture, 6, 12, d.soilMoisture>50);
+  lineChart('soilChart','soil', hourLabels, [
+    {data:[...soil, ...Array(12).fill(null)], borderColor:'#e07b34', backgroundColor:'rgba(224,123,52,.13)', fill:true, tension:.3, pointRadius:0, borderWidth:2},
+    {data:[...Array(11).fill(null), soil[soil.length-1], ...soilP], borderColor:'#8fa9bd', borderDash:[5,4], fill:false, tension:.3, pointRadius:0, borderWidth:2},
+  ], '% saturation');
+
+  renderAlerts(d);
+  renderAdmin();
+  updateMapMarker(d);
+}
+
+function topFactorSentence(d){
+  const sorted = [...d.factors].sort((a,b)=>b.val-a.val);
+  const top = sorted.slice(0,2).map(f=>f.name.toLowerCase());
+  return `Driven mainly by ${top[0]} and ${top[1]}.`;
+}
+
+function renderAlerts(d){
+  const list = document.getElementById('alertList');
+  const items = [];
+  const now = new Date();
+  const t = (m)=> new Date(now.getTime()-m*60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  if(d.pct>75){
+    items.push({sev:'extreme', msg:'🚨 EXTREME FLOOD RISK — move to higher ground now and follow official emergency instructions.', time:t(4)});
+  } else if(d.pct>50){
+    items.push({sev:'high', msg:'🚨 Heavy rainfall may cause flash flooding within the next few hours.', time:t(22)});
+  } else if(d.pct>25){
+    items.push({sev:'moderate', msg:'⚠️ Moderate flood risk detected — monitor conditions closely.', time:t(55)});
+  }
+  if(d.riverChange>1.2){
+    items.push({sev: d.riverChange>2?'high':'moderate', msg:`⚠️ River level rising rapidly (+${d.riverChange} m in 6h).`, time:t(70)});
+  }
+  if(d.rainAccum>120){
+    items.push({sev:'high', msg:`🚨 Heavy 24h rainfall accumulation of ${d.rainAccum} mm recorded.`, time:t(95)});
+  }
+  list.innerHTML='';
+  if(items.length===0){
+    list.innerHTML = '<div class="empty-note">No active alerts for '+currentLoc.name+'. Conditions are within low-risk thresholds.</div>';
+    return;
+  }
+  items.forEach(a=>{
+    list.innerHTML += `<div class="alert-card ${a.sev}">
+      <div class="alert-top"><span class="alert-sev" style="background:${riskHex(a.sev)}26;color:${riskHex(a.sev)}">${a.sev.toUpperCase()}</span><span class="alert-time">${a.time}</span></div>
+      <div class="alert-msg">${a.msg}</div>
+      <div class="alert-loc">${currentLoc.name}</div>
+    </div>`;
+  });
+}
+function riskHex(name){
+  const map = {low:'#4caf7d', moderate:'#e0b23c', high:'#e07b34', extreme:'#d4463e'};
+  return map[name]||'#8fa9bd';
+}
+
+/* ---- Admin ---- */
+const SENSOR_TYPES = ['Rain gauge','River level sensor','Soil moisture probe','Weather station'];
+function renderAdmin(){
+  const sl = document.getElementById('sensorList');
+  sl.innerHTML='';
+  PRESETS.slice(0,6).forEach((p,i)=>{
+    const online = rnd(p.lat,p.lng,900) > 0.18;
+    const status = online ? (rnd(p.lat,p.lng,901)>0.75?'warn':'ok') : 'off';
+    const type = SENSOR_TYPES[i % SENSOR_TYPES.length];
+    sl.innerHTML += `<div class="src-row">
+      <div><div class="src-name">${p.name}</div><div class="src-meta">${type} · demo node</div></div>
+      <div class="status-text"><span class="status-dot status-${status}"></span>${status==='ok'?'Online':status==='warn'?'Delayed':'Offline'}</div>
+    </div>`;
+  });
+  const highCount = PRESETS.filter(p=>p.bias>50).length;
+  document.getElementById('admHighRisk').textContent = highCount;
+
+  const srcs = ['Rain gauges','Weather stations','Weather forecast API','River/water-level sensors','Soil-moisture sensors','Satellite rainfall data','Digital Elevation Model (DEM)','Land-use / land-cover data','Historical flood records'];
+  const sList = document.getElementById('sourceList');
+  sList.innerHTML='';
+  srcs.forEach((s,i)=>{
+    const ok = rnd(i,7,3)>0.15;
+    const mins = Math.round(rnd(i,7,4,1,58));
+    sList.innerHTML += `<div class="src-row">
+      <div><div class="src-name">${s}</div><div class="src-meta">Last update ${mins} min ago · demo feed</div></div>
+      <div class="status-text"><span class="status-dot status-${ok?'ok':'warn'}"></span>${ok?'Available':'Delayed'}</div>
+    </div>`;
+  });
+
+  const th = document.getElementById('thresholdList');
+  const bands = [
+    {label:'Low', range:'0–25%', hex:'#4caf7d', w:25},
+    {label:'Moderate', range:'25–50%', hex:'#e0b23c', w:50},
+    {label:'High', range:'50–75%', hex:'#e07b34', w:75},
+    {label:'Extreme', range:'75–100%', hex:'#d4463e', w:100},
+  ];
+  th.innerHTML='';
+  bands.forEach(b=>{
+    th.innerHTML += `<div class="threshold-row">
+      <div class="threshold-label">${b.label}</div>
+      <div class="threshold-track"><div class="threshold-fill" style="width:${b.w}%;background:${b.hex}"></div></div>
+      <div class="threshold-val">${b.range}</div>
+    </div>`;
+  });
+
+  const hist = document.getElementById('historyList');
+  const events = [
+    ['2024 · Uttarakhand, IN','Extreme','Flash flood following cloudburst'],
+    ['2023 · Kerala, IN','High','Landslide-triggered flash flood'],
+    ['2022 · Cordillera, PH','Extreme','Typhoon-driven river surge'],
+    ['2021 · Antioquia, CO','Moderate','Localized flash flooding'],
+  ];
+  hist.innerHTML='';
+  events.forEach(e=>{
+    hist.innerHTML += `<div class="model-row"><span>${e[0]}<br><span style="color:var(--muted-2);font-size:11px;">${e[2]}</span></span><span style="color:${riskHex(e[1].toLowerCase())}">${e[1]}</span></div>`;
+  });
+}
+
+/* ======================= Leaflet world map ======================= */
+let map, presetMarkers=[], selectedMarker;
+function initMap(){
+  map = L.map('worldmap', {worldCopyJump:true, zoomControl:true}).setView([20,10], 2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18, subdomains:'abcd'
+  }).addTo(map);
+
+  PRESETS.forEach(p=>{
+    const d = computeLocationData(p);
+    const m = L.circleMarker([p.lat,p.lng], {
+      radius:8, color:d.risk.hex, weight:2, fillColor:d.risk.hex, fillOpacity:.55
+    }).addTo(map);
+    m.bindPopup(`<b>${p.name}</b><br>Risk: ${d.risk.name} (${d.pct}%)<br><span style="color:#8fa9bd">Simulated demo data</span>`);
+    m.on('click', ()=> selectLocation({name:p.name, lat:p.lat, lng:p.lng, bias:p.bias}));
+    presetMarkers.push(m);
+  });
+
+  map.on('click', (e)=>{
+    const lat = e.latlng.lat, lng = ((e.latlng.lng+180)%360+360)%360-180;
+    const name = `Selected location (${lat.toFixed(2)}, ${lng.toFixed(2)})`;
+    selectLocation({name, lat, lng});
+  });
+
+  updateMapMarker(computeLocationData(currentLoc));
+}
+
+function updateMapMarker(d){
+  if(!map) return;
+  if(selectedMarker) map.removeLayer(selectedMarker);
+  selectedMarker = L.circleMarker([currentLoc.lat,currentLoc.lng], {
+    radius:11, color:'#fff', weight:2, fillColor:d.risk.hex, fillOpacity:.85
+  }).addTo(map);
+  selectedMarker.bindPopup(`<b>${currentLoc.name}</b><br>Risk: ${d.risk.name} (${d.pct}%)`);
+}
+
+function selectLocation(loc){
+  currentLoc = loc;
+  renderAll();
+  if(map) map.panTo([loc.lat, loc.lng]);
+  if(navMap){
+    navMap.eachLayer(l=>{ if(l instanceof L.Marker || l instanceof L.CircleMarker) navMap.removeLayer(l); });
+    if(navRouteControl){ navMap.removeControl(navRouteControl); navRouteControl=null; }
+    navMap.setView([loc.lat, loc.lng], 12);
+    buildNavTargets();
+    document.getElementById('navDistance').textContent='--';
+    document.getElementById('navDuration').textContent='--';
+    if(userLatLng){ userMarker = L.marker(userLatLng).addTo(navMap); drawRoute(); }
+  }
+}
+
+/* ======================= Navigation ======================= */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  if(name==='map' && map){ setTimeout(()=>map.invalidateSize(), 50); }
+  if(name==='emergency' && navMap){ setTimeout(()=>navMap.invalidateSize(), 50); }
+}
+document.querySelectorAll('.nav-btn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    if(b.dataset.view==='emergency'){ showView('emergency'); return; }
+    showView(b.dataset.view);
+  });
+});
+
+/* admin is reached only via... add a way in: long-press brand mark, or simple tap count.
+   For usability, add a 6th quick entry by tapping the brand mark twice. */
+let brandTaps=0, brandTapTimer;
+document.querySelector('.brand-mark').addEventListener('click', ()=>{
+  brandTaps++;
+  clearTimeout(brandTapTimer);
+  brandTapTimer=setTimeout(()=>brandTaps=0, 600);
+  if(brandTaps>=2){ brandTaps=0; showAdminView(); }
+});
+function showAdminView(){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-admin').classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+}
+
+document.getElementById('adminTabs').addEventListener('click', (e)=>{
+  const chip = e.target.closest('.tab-chip');
+  if(!chip) return;
+  document.querySelectorAll('#adminTabs .tab-chip').forEach(c=>c.classList.remove('active'));
+  chip.classList.add('active');
+  document.querySelectorAll('.admin-pane').forEach(p=>p.style.display='none');
+  document.getElementById('pane-'+chip.dataset.tab).style.display='block';
+});
+
+document.getElementById('reportBtn').addEventListener('click', ()=>{
+  const withPhoto = camPhotoDataUrl ? ' with photo attached' : '';
+  document.getElementById('reportBtn').textContent = 'Report submitted'+withPhoto+' — thank you (demo only)';
+  setTimeout(()=>{ document.getElementById('reportBtn').textContent = 'Report a flood at this location'; }, 2500);
+});
+
+/* Preset chips row on map view */
+const presetRow = document.getElementById('presetRow');
+PRESETS.forEach(p=>{
+  const chip = document.createElement('div');
+  chip.className='preset-chip';
+  chip.textContent = p.name.split(',')[0];
+  chip.addEventListener('click', ()=> selectLocation({name:p.name, lat:p.lat, lng:p.lng, bias:p.bias}));
+  presetRow.appendChild(chip);
+});
+
+/* ======================= Live date & time ======================= */
+function tickClock(){
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const dateStr = now.toLocaleDateString([], {weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+  document.getElementById('liveClock').innerHTML = timeStr + ' <span class="date" id="liveDate">'+dateStr+'</span>';
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+/* ======================= Camera / photo scan ======================= */
+let camStream = null, camPhotoDataUrl = null;
+const camVideo = document.getElementById('camVideo');
+const camSnapshot = document.getElementById('camSnapshot');
+const camPlaceholder = document.getElementById('camPlaceholder');
+const camStartBtn = document.getElementById('camStartBtn');
+const camCaptureBtn = document.getElementById('camCaptureBtn');
+const camRetakeBtn = document.getElementById('camRetakeBtn');
+const camStatus = document.getElementById('camStatus');
+const camCanvas = document.getElementById('camCanvas');
+
+async function startCamera(){
+  camStatus.textContent = 'Requesting camera access…';
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
+    camVideo.srcObject = camStream;
+    camPlaceholder.style.display='none';
+    camSnapshot.style.display='none';
+    camVideo.style.display='block';
+    camStartBtn.style.display='none';
+    camCaptureBtn.style.display='block';
+    camRetakeBtn.style.display='none';
+    camStatus.textContent = 'Camera live — capture a photo of flood conditions.';
+  }catch(err){
+    camStatus.textContent = 'Camera unavailable (permission denied or unsupported). You can also attach a photo from your device.';
+    // Fallback: hidden file input with capture attribute
+    const fallback = document.createElement('input');
+    fallback.type='file'; fallback.accept='image/*'; fallback.capture='environment';
+    fallback.addEventListener('change', (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        camPhotoDataUrl = reader.result;
+        camSnapshot.src = camPhotoDataUrl;
+        camPlaceholder.style.display='none';
+        camVideo.style.display='none';
+        camSnapshot.style.display='block';
+        camStatus.textContent = 'Photo attached to report.';
+        camStartBtn.style.display='block'; camStartBtn.textContent='Retake photo';
+      };
+      reader.readAsDataURL(file);
+    });
+    fallback.click();
+  }
+}
+function stopCamera(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+}
+function capturePhoto(){
+  const w = camVideo.videoWidth || 640, h = camVideo.videoHeight || 480;
+  camCanvas.width=w; camCanvas.height=h;
+  camCanvas.getContext('2d').drawImage(camVideo, 0, 0, w, h);
+  camPhotoDataUrl = camCanvas.toDataURL('image/jpeg', 0.85);
+  camSnapshot.src = camPhotoDataUrl;
+  camVideo.style.display='none';
+  camSnapshot.style.display='block';
+  stopCamera();
+  camCaptureBtn.style.display='none';
+  camRetakeBtn.style.display='block';
+  camStatus.textContent = 'Photo attached — ready to include with your flood report.';
+}
+camStartBtn.addEventListener('click', startCamera);
+camCaptureBtn.addEventListener('click', capturePhoto);
+camRetakeBtn.addEventListener('click', ()=>{
+  camPhotoDataUrl=null;
+  camSnapshot.style.display='none';
+  camRetakeBtn.style.display='none';
+  camStartBtn.style.display='block'; camStartBtn.textContent='Open camera';
+  camStatus.textContent = 'No photo attached yet.';
+});
+
+/* ======================= World emergency numbers ======================= */
+const EMERGENCY_NUMBERS = [
+  ['United States','911','911','911'],['Canada','911','911','911'],['United Kingdom','999','999','999'],
+  ['Ireland','999 / 112','999 / 112','999 / 112'],['India','112','108','101'],['Bangladesh','999','999','999'],
+  ['Pakistan','15','1122','16'],['Nepal','100','102','101'],['Sri Lanka','119','110','111'],
+  ['China','110','120','119'],['Japan','110','119','119'],['South Korea','112','119','119'],
+  ['Indonesia','110','118','113'],['Philippines','911','911','911'],['Vietnam','113','115','114'],
+  ['Thailand','191','1669','199'],['Malaysia','999','999','994'],['Singapore','999','995','995'],
+  ['Australia','000','000','000'],['New Zealand','111','111','111'],
+  ['Germany','110','112','112'],['France','17','15','18'],['Spain','091 / 112','112','112'],
+  ['Italy','113','118','115'],['Portugal','112','112','112'],['Netherlands','112','112','112'],
+  ['Belgium','101 / 112','112','112'],['Switzerland','117','144','118'],['Austria','133','144','122'],
+  ['Sweden','112','112','112'],['Norway','112','113','110'],['Denmark','112','112','112'],
+  ['Finland','112','112','112'],['Poland','997 / 112','999 / 112','998 / 112'],
+  ['Greece','100','166','199'],['Turkey','155','112','110'],['Russia','102','103','101'],
+  ['Ukraine','102','103','101'],
+  ['Mexico','911','911','911'],['Brazil','190','192','193'],['Argentina','911','107','100'],
+  ['Colombia','123','125','119'],['Chile','133','131','132'],['Peru','105','106','116'],
+  ['Ecuador','911','911','911'],
+  ['South Africa','10111','10177','10177'],['Nigeria','112','112','112'],['Kenya','999 / 112','999','999'],
+  ['Egypt','122','123','180'],['Morocco','19','15','15'],['Ethiopia','991','907','939'],
+  ['UAE','999','998','997'],['Saudi Arabia','999','997','998'],['Israel','100','101','102'],
+  ['Iran','110','115','125'],
+  ['Global (GSM mobile default)','112','112','112'],
+];
+function renderEmergencyNumbers(filter){
+  const list = document.getElementById('countryList');
+  const f = (filter||'').trim().toLowerCase();
+  const rows = EMERGENCY_NUMBERS.filter(c=> c[0].toLowerCase().includes(f));
+  list.innerHTML='';
+  if(rows.length===0){ list.innerHTML = '<div class="no-match">No country matches that search.</div>'; return; }
+  rows.forEach(c=>{
+    list.innerHTML += `<div class="country-row">
+      <div class="country-name">${c[0]}</div>
+      <div class="country-nums">
+        <span class="num-chip"><span class="lbl">Police</span>${c[1]}</span>
+        <span class="num-chip"><span class="lbl">Ambul.</span>${c[2]}</span>
+        <span class="num-chip"><span class="lbl">Fire</span>${c[3]}</span>
+      </div>
+    </div>`;
+  });
+}
+document.getElementById('numSearch').addEventListener('input', (e)=> renderEmergencyNumbers(e.target.value));
+renderEmergencyNumbers('');
+
+/* ======================= Navigation ======================= */
+let navMap, navRouteControl, userMarker, userLatLng=null;
+function safeZonesFor(loc){
+  // demo safe zones offset from the current location (higher ground / shelters)
+  return [
+    {name:'Ridge Road high ground', lat: loc.lat + 0.018, lng: loc.lng + 0.012},
+    {name:'Community shelter (school)', lat: loc.lat - 0.014, lng: loc.lng + 0.02},
+    {name:'District emergency centre', lat: loc.lat + 0.03, lng: loc.lng - 0.02},
+  ];
+}
+let activeSafeZone = null;
+
+function initNavMap(){
+  navMap = L.map('navmap', {zoomControl:true}).setView([currentLoc.lat, currentLoc.lng], 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18, subdomains:'abcd'
+  }).addTo(navMap);
+  buildNavTargets();
+}
+function buildNavTargets(){
+  const zones = safeZonesFor(currentLoc);
+  activeSafeZone = zones[0];
+  const row = document.getElementById('navTargetRow');
+  row.innerHTML='';
+  zones.forEach((z,i)=>{
+    const chip = document.createElement('div');
+    chip.className = 'nav-target-chip'+(i===0?' active':'');
+    chip.textContent = z.name;
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('.nav-target-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      activeSafeZone = z;
+      if(userLatLng) drawRoute();
+    });
+    row.appendChild(chip);
+  });
+  L.marker([currentLoc.lat, currentLoc.lng]).addTo(navMap).bindPopup('Current selected region');
+  zones.forEach(z=> L.circleMarker([z.lat,z.lng],{radius:7,color:'#4caf7d',fillColor:'#4caf7d',fillOpacity:.7}).addTo(navMap).bindPopup(z.name));
+}
+function drawRoute(){
+  if(!userLatLng || !activeSafeZone) return;
+  if(navRouteControl){ navMap.removeControl(navRouteControl); navRouteControl=null; }
+  navRouteControl = L.Routing.control({
+    waypoints:[L.latLng(userLatLng.lat, userLatLng.lng), L.latLng(activeSafeZone.lat, activeSafeZone.lng)],
+    lineOptions:{styles:[{color:'#3fb8c7', weight:5, opacity:.85}]},
+    addWaypoints:false, draggableWaypoints:false, fitSelectedRoutes:true,
+    createMarker: function(i, wp){ return L.marker(wp.latLng, {icon: L.divIcon({className:'', html: i===0?'📍':'🏠', iconSize:[24,24]})}); },
+    show:false,
+  }).addTo(navMap);
+  navRouteControl.on('routesfound', (e)=>{
+    const r = e.routes[0];
+    document.getElementById('navDistance').textContent = (r.summary.totalDistance/1000).toFixed(1)+' km';
+    document.getElementById('navDuration').textContent = Math.round(r.summary.totalTime/60)+' min';
+  });
+  navRouteControl.on('routingerror', ()=>{
+    document.getElementById('navStatus').textContent = 'Routing service unavailable right now — showing straight-line distance instead.';
+    const d = userLatLng.distanceTo ? userLatLng.distanceTo(L.latLng(activeSafeZone.lat, activeSafeZone.lng)) : null;
+  });
+}
+document.getElementById('useMyLocationBtn').addEventListener('click', ()=>{
+  const status = document.getElementById('navStatus');
+  if(!navigator.geolocation){ status.textContent='Geolocation is not supported on this device.'; return; }
+  status.textContent = 'Requesting your location…';
+  navigator.geolocation.getCurrentPosition((pos)=>{
+    userLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+    if(userMarker) navMap.removeLayer(userMarker);
+    userMarker = L.marker(userLatLng).addTo(navMap).bindPopup('You are here').openPopup();
+    status.textContent = 'Location found — route drawn to '+ (activeSafeZone?activeSafeZone.name:'safe zone') +'.';
+    drawRoute();
+  }, (err)=>{
+    status.textContent = 'Could not get your location ('+err.message+'). You can still browse safe-zone routes on the map.';
+  }, {enableHighAccuracy:true, timeout:10000});
+});
+
+/* ======================= Init ======================= */
+initMap();
+renderAll();
+setInterval(renderAll, 60000);
+initNavMap();
+</script>
+</body>
+</html>
